@@ -34,127 +34,65 @@ class MainActivity : AppCompatActivity() {
         val clickmeLightOn = findViewById<Button>(R.id.buttonLightOn)
         val clickmeLightOff = findViewById<Button>(R.id.buttonLightOff)
 
+        mqttClient = MQTTClient(this, MQTT_SERVER_URI, MQTT_CLIENT_ID)
+        // Connect and login to MQTT Broker
+        reconnect()
         clickme.setOnClickListener {
+            if (mqttClient.isConnected()) {
+                mqttClient.publish(MQTT_GARAGE_TOPIC,
+                    MQTT_GARAGE_MSG,
+                    1,
+                    false,
+                    object : IMqttActionListener {
+                        override fun onSuccess(asyncActionToken: IMqttToken?) {
+                            val msg =
+                                "Publish message: " + MQTT_GARAGE_MSG + " to topic: " + MQTT_GARAGE_TOPIC
+                            Log.d(this.javaClass.name, msg)
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        }
 
-         //   Toast.makeText(this, "Button Clicked", Toast.LENGTH_SHORT).show()
+                        override fun onFailure(
+                            asyncActionToken: IMqttToken?,
+                            exception: Throwable?
+                        ) {
+                            Log.d(this.javaClass.name, "Failed to publish message to topic")
+                        }
+                    })
+            } else {
+                val msg = "Connection lost"
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                reconnect()
+            }
+            //   Toast.makeText(this, "Button Clicked", Toast.LENGTH_SHORT).show()
 
-            mqttClient = MQTTClient(this, MQTT_SERVER_URI, MQTT_CLIENT_ID)
-            // Connect and login to MQTT Broker
-            mqttClient.connect(MQTT_USERNAME,
-                MQTT_PWD,
-                object : IMqttActionListener {
-                    override fun onSuccess(asyncActionToken: IMqttToken?) {
-                        Log.d(this.javaClass.name, "Connection success")
-
-
-                        mqttClient.publish(MQTT_GARAGE_TOPIC,
-                            MQTT_GARAGE_MSG,
-                            1,
-                            false,
-                            object : IMqttActionListener {
-                                override fun onSuccess(asyncActionToken: IMqttToken?) {
-                                    val msg =
-                                        "Publish message: " + MQTT_GARAGE_MSG + " to topic: " + MQTT_GARAGE_TOPIC
-                                    Log.d(this.javaClass.name, msg)
-                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
-                                }
-
-                                override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                                    Log.d(this.javaClass.name, "Failed to publish message to topic")
-                                }
-                            })
-
-                        mqttClient.disconnect()
-
-
-                    }
-
-                    override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection failure: ${exception.toString()}")
-                    }
-                },
-                object : MqttCallback {
-                    override fun messageArrived(topic: String?, message: MqttMessage?) {
-                        val msg = "Receive message: ${message.toString()} from topic: $topic"
-                        Log.d(this.javaClass.name, msg)
-                    }
-
-                    override fun connectionLost(cause: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection lost ${cause.toString()}")
-                    }
-
-                    override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                        Log.d(this.javaClass.name, "Delivery complete")
-                    }
-                })
         }
         clickmeLightOn.setOnClickListener {
+            if (mqttClient.isConnected()) {
+                mqttClient.publish(MQTT_LIGHT_TOPIC,
+                    MQTT_LIGHTON_MSG,
+                    1,
+                    false,
+                    object : IMqttActionListener {
+                        override fun onSuccess(asyncActionToken: IMqttToken?) {
+                            val msg =
+                                "Publish message: " + MQTT_LIGHTON_MSG + " to topic: " + MQTT_LIGHT_TOPIC
+                            Log.d(this.javaClass.name, msg)
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        }
 
-            //   Toast.makeText(this, "Button Clicked", Toast.LENGTH_SHORT).show()
+                        override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
+                            Log.d(this.javaClass.name, "Failed to publish message to topic")
+                        }
+                    })
+            } else {
+                val msg = "Connection lost"
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                reconnect()
+            }
 
-            mqttClient = MQTTClient(this, MQTT_SERVER_URI, MQTT_CLIENT_ID)
-            // Connect and login to MQTT Broker
-            mqttClient.connect(MQTT_USERNAME,
-                MQTT_PWD,
-                object : IMqttActionListener {
-                    override fun onSuccess(asyncActionToken: IMqttToken?) {
-                        Log.d(this.javaClass.name, "Connection success")
-
-
-                        mqttClient.publish(MQTT_LIGHT_TOPIC,
-                            MQTT_LIGHTON_MSG,
-                            1,
-                            false,
-                            object : IMqttActionListener {
-                                override fun onSuccess(asyncActionToken: IMqttToken?) {
-                                    val msg =
-                                        "Publish message: " + MQTT_LIGHTON_MSG + " to topic: " + MQTT_LIGHT_TOPIC
-                                    Log.d(this.javaClass.name, msg)
-                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
-                                }
-
-                                override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                                    Log.d(this.javaClass.name, "Failed to publish message to topic")
-                                }
-                            })
-
-                        mqttClient.disconnect()
-
-
-                    }
-
-                    override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection failure: ${exception.toString()}")
-                    }
-                },
-                object : MqttCallback {
-                    override fun messageArrived(topic: String?, message: MqttMessage?) {
-                        val msg = "Receive message: ${message.toString()} from topic: $topic"
-                        Log.d(this.javaClass.name, msg)
-                    }
-
-                    override fun connectionLost(cause: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection lost ${cause.toString()}")
-                    }
-
-                    override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                        Log.d(this.javaClass.name, "Delivery complete")
-                    }
-                })
         }
         clickmeLightOff.setOnClickListener {
-
-            //   Toast.makeText(this, "Button Clicked", Toast.LENGTH_SHORT).show()
-
-            mqttClient = MQTTClient(this, MQTT_SERVER_URI, MQTT_CLIENT_ID)
-            // Connect and login to MQTT Broker
-            mqttClient.connect(MQTT_USERNAME,
-                MQTT_PWD,
-                object : IMqttActionListener {
-                    override fun onSuccess(asyncActionToken: IMqttToken?) {
-                        Log.d(this.javaClass.name, "Connection success")
-
-
+            if (mqttClient.isConnected()) {
                         mqttClient.publish(MQTT_LIGHT_TOPIC,
                             MQTT_LIGHTOFF_MSG,
                             1,
@@ -172,44 +110,23 @@ class MainActivity : AppCompatActivity() {
                                 }
                             })
 
-                        mqttClient.disconnect()
-
-
-                    }
-
-                    override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection failure: ${exception.toString()}")
-                    }
-                },
-                object : MqttCallback {
-                    override fun messageArrived(topic: String?, message: MqttMessage?) {
-                        val msg = "Receive message: ${message.toString()} from topic: $topic"
-                        Log.d(this.javaClass.name, msg)
-                    }
-
-                    override fun connectionLost(cause: Throwable?) {
-                        Log.d(this.javaClass.name, "Connection lost ${cause.toString()}")
-                    }
-
-                    override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                        Log.d(this.javaClass.name, "Delivery complete")
-                    }
-                })
+            } else {
+                val msg = "Connection lost"
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                reconnect()
+            }
         }
 
     }
 
 
     private fun canAccessINTERNET(): Boolean {
-        Log.d(this.javaClass.name, "1")
         return hasPermission(Manifest.permission.INTERNET)
     }
     private fun canAccessWAKELOCK(): Boolean {
-        Log.d(this.javaClass.name, "2")
-        return hasPermission(Manifest.permission.WAKE_LOCK)
+       return hasPermission(Manifest.permission.WAKE_LOCK)
     }
     private fun canAccessACCESSNETWORKSTATE(): Boolean {
-        Log.d(this.javaClass.name, "3")
         return hasPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     }
 
@@ -218,4 +135,35 @@ class MainActivity : AppCompatActivity() {
         return PackageManager.PERMISSION_GRANTED == checkSelfPermission(perm)
     }
 
+    fun reconnect(){
+        mqttClient.connect(MQTT_USERNAME,
+            MQTT_PWD,
+            object : IMqttActionListener {
+                override fun onSuccess(asyncActionToken: IMqttToken?) {
+                    Log.d(this.javaClass.name, "Connection success")
+                }
+                override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
+                    Log.d(this.javaClass.name, "Connection failure: ${exception.toString()}")
+                }
+            },
+            object : MqttCallback {
+                override fun messageArrived(topic: String?, message: MqttMessage?) {
+                    val msg = "Receive message: ${message.toString()} from topic: $topic"
+                    Log.d(this.javaClass.name, msg)
+                }
+
+                override fun connectionLost(cause: Throwable?) {
+                    Log.d(this.javaClass.name, "Connection lost ${cause.toString()}")
+                }
+
+                override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                    Log.d(this.javaClass.name, "Delivery complete")
+                }
+            })
+    }
+
+    fun destroy() {
+        mqttClient.disconnect()
+    }
+  
 }
