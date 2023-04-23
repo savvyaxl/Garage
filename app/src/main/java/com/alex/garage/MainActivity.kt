@@ -2,12 +2,20 @@ package com.alex.garage
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import org.eclipse.paho.client.mqttv3.*
+import org.eclipse.paho.client.mqttv3.IMqttActionListener
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.IMqttToken
+import org.eclipse.paho.client.mqttv3.MqttCallback
+import org.eclipse.paho.client.mqttv3.MqttException
+import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.json.JSONObject
 
 
 class MainActivity : AppCompatActivity() {
@@ -19,7 +27,7 @@ class MainActivity : AppCompatActivity() {
     )
     private val requestnumber = 1337
 
-    private lateinit var mqttClient : MQTTClient
+    private lateinit var mqttClient: MQTTClient
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -46,7 +54,7 @@ class MainActivity : AppCompatActivity() {
                     object : IMqttActionListener {
                         override fun onSuccess(asyncActionToken: IMqttToken?) {
                             val msg =
-                                "Publish message: " + MQTT_GARAGE_MSG + " to topic: " + MQTT_GARAGE_TOPIC
+                                "Publish message: $MQTT_GARAGE_MSG to topic: $MQTT_GARAGE_TOPIC"
                             Log.d(this.javaClass.name, msg)
                             Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                         }
@@ -75,12 +83,15 @@ class MainActivity : AppCompatActivity() {
                     object : IMqttActionListener {
                         override fun onSuccess(asyncActionToken: IMqttToken?) {
                             val msg =
-                                "Publish message: " + MQTT_LIGHTON_MSG + " to topic: " + MQTT_LIGHT_TOPIC
+                                "Publish message: $MQTT_LIGHTON_MSG to topic: $MQTT_LIGHT_TOPIC"
                             Log.d(this.javaClass.name, msg)
                             Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                         }
 
-                        override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
+                        override fun onFailure(
+                            asyncActionToken: IMqttToken?,
+                            exception: Throwable?
+                        ) {
                             Log.d(this.javaClass.name, "Failed to publish message to topic")
                         }
                     })
@@ -93,22 +104,25 @@ class MainActivity : AppCompatActivity() {
         }
         clickmeLightOff.setOnClickListener {
             if (mqttClient.isConnected()) {
-                        mqttClient.publish(MQTT_LIGHT_TOPIC,
-                            MQTT_LIGHTOFF_MSG,
-                            1,
-                            false,
-                            object : IMqttActionListener {
-                                override fun onSuccess(asyncActionToken: IMqttToken?) {
-                                    val msg =
-                                        "Publish message: " + MQTT_LIGHTOFF_MSG + " to topic: " + MQTT_LIGHT_TOPIC
-                                    Log.d(this.javaClass.name, msg)
-                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
-                                }
+                mqttClient.publish(MQTT_LIGHT_TOPIC,
+                    MQTT_LIGHTOFF_MSG,
+                    1,
+                    false,
+                    object : IMqttActionListener {
+                        override fun onSuccess(asyncActionToken: IMqttToken?) {
+                            val msg =
+                                "Publish message: $MQTT_LIGHTOFF_MSG to topic: $MQTT_LIGHT_TOPIC"
+                            Log.d(this.javaClass.name, msg)
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        }
 
-                                override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                                    Log.d(this.javaClass.name, "Failed to publish message to topic")
-                                }
-                            })
+                        override fun onFailure(
+                            asyncActionToken: IMqttToken?,
+                            exception: Throwable?
+                        ) {
+                            Log.d(this.javaClass.name, "Failed to publish message to topic")
+                        }
+                    })
 
             } else {
                 val msg = "Connection lost"
@@ -123,9 +137,11 @@ class MainActivity : AppCompatActivity() {
     private fun canAccessINTERNET(): Boolean {
         return hasPermission(Manifest.permission.INTERNET)
     }
+
     private fun canAccessWAKELOCK(): Boolean {
-       return hasPermission(Manifest.permission.WAKE_LOCK)
+        return hasPermission(Manifest.permission.WAKE_LOCK)
     }
+
     private fun canAccessACCESSNETWORKSTATE(): Boolean {
         return hasPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     }
@@ -135,13 +151,17 @@ class MainActivity : AppCompatActivity() {
         return PackageManager.PERMISSION_GRANTED == checkSelfPermission(perm)
     }
 
-    fun reconnect(){
+    private fun reconnect() {
         mqttClient.connect(MQTT_USERNAME,
             MQTT_PWD,
             object : IMqttActionListener {
                 override fun onSuccess(asyncActionToken: IMqttToken?) {
                     Log.d(this.javaClass.name, "Connection success")
+                    subscribe(MQTT_STATE_TOPIC_LIGHT)
+                    subscribe(MQTT_STATE_TOPIC_GARAGE)
+                    Log.d(this.javaClass.name, "subscribed")
                 }
+
                 override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
                     Log.d(this.javaClass.name, "Connection failure: ${exception.toString()}")
                 }
@@ -150,6 +170,12 @@ class MainActivity : AppCompatActivity() {
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
                     val msg = "Receive message: ${message.toString()} from topic: $topic"
                     Log.d(this.javaClass.name, msg)
+                    if ( topic == MQTT_STATE_TOPIC_LIGHT ) {
+                        parseLightMessage(message.toString())
+                    }
+                    if ( topic == MQTT_STATE_TOPIC_GARAGE ) {
+                        parseGarageMessage(message.toString())
+                    }
                 }
 
                 override fun connectionLost(cause: Throwable?) {
@@ -160,10 +186,59 @@ class MainActivity : AppCompatActivity() {
                     Log.d(this.javaClass.name, "Delivery complete")
                 }
             })
-    }
+        }
 
-    fun destroy() {
-        mqttClient.disconnect()
+        fun subscribe(subscriptionTopic: String, qos: Int = 0) {
+            try {
+                mqttClient.subscribe(subscriptionTopic, qos, object : IMqttActionListener {
+                    override fun onSuccess(asyncActionToken: IMqttToken?) {
+                        Log.d(this.javaClass.name, "Subscribed to topic, $subscriptionTopic")
+                    }
+                    override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
+                        Log.d(this.javaClass.name, "Subscription to topic $subscriptionTopic failed!")
+                    }
+                })
+            } catch (ex: MqttException) {
+                System.err.println("Exception whilst subscribing to topic '$subscriptionTopic'")
+  //              94
+                ex.printStackTrace()
+            }
+        }
+
+        fun destroy() {
+            mqttClient.disconnect()
+        }
+
+    private fun parseLightMessage (message: String){
+        val jObject = JSONObject(message)
+        try {
+            val aJsonString = jObject.getString("Lights_4")
+            if (aJsonString == "On") {
+                changeLightButtonColor(Color.YELLOW)
+            } else if (aJsonString == "Off") {
+                changeLightButtonColor(Color.BLUE)
+            }
+        } finally {
+
+        }
     }
-  
+    private fun parseGarageMessage (message: String){
+        val jObject = JSONObject(message)
+        try {
+            val bJsonString = jObject.getString("Garage")
+            if (bJsonString == "On") {
+                changeGarageButtonColor(Color.YELLOW)
+            } else if (bJsonString == "Off") {
+                changeGarageButtonColor(Color.BLUE)
+            }
+        } finally {
+
+        }
+    }
+    private fun changeGarageButtonColor (_color: Int){
+        findViewById<Button>(R.id.button).backgroundTintList = ColorStateList.valueOf(_color)
+    }
+    private fun changeLightButtonColor (_color: Int){
+        findViewById<Button>(R.id.buttonLightOn).backgroundTintList = ColorStateList.valueOf(_color)
+    }
 }
